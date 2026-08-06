@@ -1,0 +1,20 @@
+.DS_Store
+.env
+.idea/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Runtime data and downloaded third-party content.
+vulnradar/cache/
+vulnradar/data/
+logs/
+*.db
+*.sqlite*
+*.log
+*.jsonl
