@@ -58,18 +58,18 @@ def shorten_url(url: Optional[str]) -> str:
 
 @app.command()
 def init():
-    """Tạo DB và khởi tạo bảng 'entries'."""
+    """Create the database and initialize the entries table."""
     try:
         init_db()
-        console.print("[bold green]✓[/bold green] Database đã được khởi tạo thành công!")
+        console.print("[bold green]✓[/bold green] Database initialized successfully.")
     except Exception as e:
-        console.print(f"[bold red]✗ Lỗi khi khởi tạo DB:[/bold red] {e}")
+        console.print(f"[bold red]✗ Database initialization failed:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
 @app.command()
 def status():
-    """Đếm và hiển thị số lượng entry theo source và theo entry_type."""
+    """Count and display entries by source and entry type."""
     db = get_db()
     try:
         total_entries = db.query(func.count(Entry.id)).scalar() or 0
@@ -103,8 +103,8 @@ def status():
         console.print(type_table)
 
     except Exception as e:
-        console.print(f"[bold red]✗ Lỗi khi truy vấn DB:[/bold red] {e}")
-        console.print("[dim]Gợi ý: Hãy chạy 'python3 cli.py init' nếu bạn chưa tạo database.[/dim]")
+        console.print(f"[bold red]✗ Database query failed:[/bold red] {e}")
+        console.print("[dim]Tip: Run 'python3 cli.py init' if the database has not been created.[/dim]")
         raise typer.Exit(code=1)
     finally:
         db.close()
@@ -112,10 +112,10 @@ def status():
 
 @app.command()
 def ingest(
-    source: str = typer.Argument("all", help="Nguồn dữ liệu: payloadsallthethings | nvd | cisa_kev | bugbounty_writeups | all"),
-    days: int = typer.Option(7, "--days", "-d", help="Số ngày gần nhất cần fetch CVE từ NVD (mặc định 7)")
+    source: str = typer.Argument("all", help="Data source: payloadsallthethings | nvd | cisa_kev | bugbounty_writeups | all"),
+    days: int = typer.Option(7, "--days", "-d", help="Number of recent days to fetch from NVD (default: 7)")
 ):
-    """Thu thập dữ liệu từ nguồn chỉ định và lưu vào DB."""
+    """Collect data from the selected source and store it in the database."""
     db = get_db()
     source_lower = source.lower()
 
@@ -150,14 +150,14 @@ def ingest(
         tasks.append(("cisa_kev", lambda: c3.fetch(), c3))
         tasks.append(("bugbounty_writeups", lambda: c4.fetch(), c4))
     else:
-        console.print(f"[bold red]✗ Nguồn dữ liệu '{source}' không hợp lệ.[/bold red]")
+        console.print(f"[bold red]✗ Invalid data source: '{source}'.[/bold red]")
         raise typer.Exit(code=1)
 
     for source_name, fetch_fn, conn_obj in tasks:
-        console.print(f"[bold blue][*][/bold blue] Đang ingest từ: [bold cyan]{source_name}[/bold cyan]...")
+        console.print(f"[bold blue][*][/bold blue] Ingesting from [bold cyan]{source_name}[/bold cyan]...")
         try:
             records = fetch_fn()
-            console.print(f"    - Đã thu thập: [bold yellow]{len(records)}[/bold yellow] records. Đang lưu vào DB...")
+            console.print(f"    - Collected [bold yellow]{len(records)}[/bold yellow] records. Saving to the database...")
             inserted, updated = upsert_entries(db, records)
 
             is_complete = getattr(conn_obj, "is_complete", True)
@@ -166,28 +166,28 @@ def ingest(
 
             if is_complete:
                 if total_expected > 0 and source_name == "nvd":
-                    console.print(f"[bold green]✓ Hoàn thành {source_name}:[/bold green] [{len(records)}/{total_expected}] CVEs (+{inserted} mới, {updated} cập nhật).\n")
+                    console.print(f"[bold green]✓ Completed {source_name}:[/bold green] [{len(records)}/{total_expected}] CVEs (+{inserted} new, {updated} updated).\n")
                 else:
-                    console.print(f"[bold green]✓ Hoàn thành {source_name}:[/bold green] (+{inserted} mới, {updated} cập nhật).\n")
+                    console.print(f"[bold green]✓ Completed {source_name}:[/bold green] (+{inserted} new, {updated} updated).\n")
             else:
-                console.print(f"[bold yellow]⚠ Hoàn thành một phần {source_name}:[/bold yellow] [{len(records)}/{total_expected}] CVEs (dừng ở page {failed_at_page}). Chạy lại để lấy nốt.\n")
+                console.print(f"[bold yellow]⚠ Partially completed {source_name}:[/bold yellow] [{len(records)}/{total_expected}] CVEs (stopped at page {failed_at_page}). Rerun to continue.\n")
 
         except Exception as e:
-            console.print(f"[bold red]✗ Lỗi khi ingest {source_name}:[/bold red] {e}\n")
+            console.print(f"[bold red]✗ Failed to ingest {source_name}:[/bold red] {e}\n")
 
 
 @app.command()
 def tag(
-    missing_only: bool = typer.Option(True, "--missing-only", help="Chỉ tag các entry chưa có tag hoặc có tag 'general-cve'"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Chạy thử nghiệm hiển thị kết quả, KHÔNG ghi vào DB"),
-    limit: int = typer.Option(100, "--limit", "-n", help="Giới hạn số lượng entry cần tag (0 = không giới hạn)")
+    missing_only: bool = typer.Option(True, "--missing-only", help="Tag only entries without tags or tagged 'general-cve'"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview results without writing to the database"),
+    limit: int = typer.Option(100, "--limit", "-n", help="Maximum entries to tag (0 = unlimited)")
 ):
-    """Tự động phân loại tag cho entries bằng Claude LLM (Haiku 4.5)."""
+    """Automatically classify entry tags with Claude Haiku 4.5."""
     load_dotenv()
     api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
 
     if not api_key:
-        console.print("[bold red]✗ Lỗi:[/bold red] Chưa cấu hình ANTHROPIC_API_KEY trong tệp .env.")
+        console.print("[bold red]✗ Error:[/bold red] ANTHROPIC_API_KEY is not configured in .env.")
         raise typer.Exit(code=1)
 
     import anthropic
@@ -203,12 +203,12 @@ def tag(
     try:
         targets = get_target_entries(db, missing_only=missing_only, limit=limit)
 
-        mode_str = "[yellow]DRY-RUN (Không ghi DB)[/yellow]" if dry_run else "[green]REAL RUN (Ghi DB)[/green]"
+        mode_str = "[yellow]DRY RUN (no database writes)[/yellow]" if dry_run else "[green]REAL RUN (writes to database)[/green]"
         console.print(f"\n[bold magenta]🤖 VulnRadar LLM Auto-Tagging[/bold magenta] ({mode_str})")
         console.print(f"[*] Model: [cyan]{MODEL_NAME}[/cyan] | Targets: [bold yellow]{len(targets)}[/bold yellow] (limit {limit})\n")
 
         if not targets:
-            console.print("[dim]Không tìm thấy entry nào cần tag.[/dim]\n")
+            console.print("[dim]No entries require tagging.[/dim]\n")
             return
 
         client = anthropic.Anthropic(api_key=api_key)
@@ -268,12 +268,12 @@ def tag(
                     )
 
             except Exception as e:
-                console.print(f"[bold red]    [!] Lỗi batch {batch_idx + 1}:[/bold red] {e}")
+                console.print(f"[bold red]    [!] Batch {batch_idx + 1} failed:[/bold red] {e}")
                 failed_count += len(batch)
 
         if not dry_run:
             db.commit()
-            console.print("\n[bold green]✓ Đã cập nhật tag vào Database![/bold green]\n")
+            console.print("\n[bold green]✓ Database tags updated.[/bold green]\n")
 
         console.print(table)
         console.print()
@@ -287,7 +287,7 @@ def tag(
         console.print(f"  • Estimated Cost:   [bold yellow]${estimated_cost:.5f} USD[/bold yellow]\n")
 
     except Exception as e:
-        console.print(f"[bold red]✗ Lỗi khi thực thi auto-tagging:[/bold red] {e}")
+        console.print(f"[bold red]✗ Auto-tagging failed:[/bold red] {e}")
         raise typer.Exit(code=1)
     finally:
         db.close()
@@ -295,15 +295,15 @@ def tag(
 
 @app.command()
 def search(
-    keyword: Optional[str] = typer.Argument(None, help="Tìm kiếm từ khóa trong title và summary"),
-    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Lọc theo ngôn ngữ/tech (vd: php, java, laravel)"),
-    type: Optional[str] = typer.Option(None, "--type", "-t", help="Lọc theo loại lỗ hổng (vd: sqli, ssrf, xss, rce)"),
-    source: Optional[str] = typer.Option(None, "--source", "-s", help="Lọc theo nguồn (vd: nvd, bugbounty_writeups, payloadsallthethings)"),
-    kev: bool = typer.Option(False, "--kev", "-k", help="Chỉ hiển thị entry thuộc CISA KEV (đang bị khai thác thực tế)"),
-    limit: int = typer.Option(20, "--limit", "-n", help="Giới hạn số lượng kết quả (mặc định 20)"),
-    show_url: bool = typer.Option(False, "--show-url", "-u", help="In danh sách URL đầy đủ bên dưới bảng")
+    keyword: Optional[str] = typer.Argument(None, help="Search titles and summaries for a keyword"),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Filter by language or technology, e.g. php, java, laravel"),
+    type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by vulnerability type, e.g. sqli, ssrf, xss, rce"),
+    source: Optional[str] = typer.Option(None, "--source", "-s", help="Filter by source, e.g. nvd, bugbounty_writeups, payloadsallthethings"),
+    kev: bool = typer.Option(False, "--kev", "-k", help="Show only actively exploited CISA KEV entries"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum result count (default: 20)"),
+    show_url: bool = typer.Option(False, "--show-url", "-u", help="Print the complete URL list below the table")
 ):
-    """Tìm kiếm & tra cứu nhanh lỗ hổng, payloads, writeups từ knowledge base."""
+    """Search vulnerabilities, payloads, and write-ups in the knowledge base."""
     db = get_db()
     try:
         results = search_entries(
@@ -334,7 +334,7 @@ def search(
         console.print(f"\n{title_str} — [bold yellow]{len(results)}[/bold yellow] entries (limit {limit})\n")
 
         if not results:
-            console.print("[dim]Không tìm thấy kết quả nào phù hợp.[/dim]\n")
+            console.print("[dim]No matching results found.[/dim]\n")
             return
 
         table = Table(show_header=True, header_style="bold blue", box=box.ROUNDED, expand=True)
@@ -374,7 +374,7 @@ def search(
             console.print()
 
     except Exception as e:
-        console.print(f"[bold red]✗ Lỗi khi tìm kiếm:[/bold red] {e}")
+        console.print(f"[bold red]✗ Search failed:[/bold red] {e}")
         raise typer.Exit(code=1)
     finally:
         db.close()
@@ -382,14 +382,14 @@ def search(
 
 @app.command()
 def digest(
-    since: str = typer.Option("1d", "--since", "-t", help="Khoảng thời gian digest (vd: 1d, 7d, 24h, 48h)"),
-    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Lọc theo ngôn ngữ/tech (phân cách bởi dấu phẩy, vd: php,java)"),
-    type: Optional[str] = typer.Option(None, "--type", help="Lọc theo loại lỗ hổng (vd: sqli, rce, ssrf)"),
-    source: Optional[str] = typer.Option(None, "--source", "-s", help="Lọc theo nguồn (vd: nvd, cisa_kev, bugbounty_writeups)"),
-    limit: int = typer.Option(50, "--limit", "-n", help="Giới hạn số lượng hiển thị (0 = không giới hạn)"),
-    show_url: bool = typer.Option(False, "--show-url", "-u", help="In danh sách URL đầy đủ bên dưới bảng")
+    since: str = typer.Option("1d", "--since", "-t", help="Digest period, e.g. 1d, 7d, 24h, 48h"),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Comma-separated language or technology filter, e.g. php,java"),
+    type: Optional[str] = typer.Option(None, "--type", help="Vulnerability-type filter, e.g. sqli, rce, ssrf"),
+    source: Optional[str] = typer.Option(None, "--source", "-s", help="Source filter, e.g. nvd, cisa_kev, bugbounty_writeups"),
+    limit: int = typer.Option(50, "--limit", "-n", help="Maximum displayed entries (0 = unlimited)"),
+    show_url: bool = typer.Option(False, "--show-url", "-u", help="Print the complete URL list below the table")
 ):
-    """Tạo báo cáo digest bảo mật định kỳ (Daily / Weekly Vulnerability Digest)."""
+    """Create a periodic daily or weekly vulnerability digest."""
     from vulnradar.digest import get_digest_entries
 
     db = get_db()
@@ -415,7 +415,7 @@ def digest(
         console.print(f"\n📰 VulnRadar Security Digest ({', '.join(filter_desc)}) — [bold yellow]{len(entries)}[/bold yellow] entries (Total: [bold yellow]{total_count}[/bold yellow])\n")
 
         if not entries:
-            console.print("[dim]Không có entry mới nào trong khoảng thời gian chỉ định.[/dim]\n")
+            console.print("[dim]No new entries were found in the selected period.[/dim]\n")
             return
 
         table = Table(show_header=True, header_style="bold blue", box=box.ROUNDED, expand=True)
@@ -461,12 +461,12 @@ def digest(
         non_kev_str = f"[bold green]{non_kev_count}[/bold green]"
 
         if displayed_count < total_count:
-            console.print(f"[bold cyan]📊 Digest Summary:[/bold cyan] {total_count} entries trong {period_desc} ({kev_str} KEV + {non_kev_str} Non-KEV). Hiển thị {displayed_count}/{total_count}. Dùng `--limit 0` để xem đầy đủ.\n")
+            console.print(f"[bold cyan]📊 Digest Summary:[/bold cyan] {total_count} entries in {period_desc} ({kev_str} KEV + {non_kev_str} non-KEV). Showing {displayed_count}/{total_count}. Use `--limit 0` to show all.\n")
         else:
             console.print(f"[bold cyan]📊 Digest Summary:[/bold cyan] {total_count} entries trong {period_desc} ({kev_str} KEV + {non_kev_str} Non-KEV).\n")
 
     except Exception as e:
-        console.print(f"[bold red]✗ Lỗi khi tạo digest:[/bold red] {e}")
+        console.print(f"[bold red]✗ Digest generation failed:[/bold red] {e}")
         raise typer.Exit(code=1)
     finally:
         db.close()

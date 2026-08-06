@@ -108,7 +108,7 @@ class NVDConnector(BaseConnector):
 
                     # Handle invalid API key (403 or 404 from NVD)
                     if resp.status_code in [403, 404] and "apiKey" in headers:
-                        print("    [!] CẢNH BÁO: NVD_API_KEY không hợp lệ. Tự động chuyển sang chế độ không dùng API Key...")
+                        print("    [!] WARNING: NVD_API_KEY is invalid. Falling back to unauthenticated mode...")
                         headers.pop("apiKey", None)
                         delay = 0.7
                         resp = requests.get(NVD_API_URL, headers=headers, params=params, timeout=60)
@@ -127,7 +127,7 @@ class NVDConnector(BaseConnector):
                     time.sleep(retry_delays[attempt - 1])
 
             if not page_success or not resp:
-                print(f"[!] ⚠ CẢNH BÁO: Ingest NVD dừng sớm tại page {page_num} do lỗi kết nối/API sau {max_retries} lần thử.")
+                print(f"[!] ⚠ WARNING: NVD ingestion stopped at page {page_num} after {max_retries} connection/API attempts.")
                 self.is_complete = False
                 self.failed_at_page = page_num
                 break
